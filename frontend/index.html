@@ -14,13 +14,37 @@
             max-width: 200px;
             height: auto;
         }
+        form {
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
+    <h2>Create Blog Post</h2>
+    <form id="blogForm">
+        <label for="category">Category:</label>
+        <textarea id="category" name="category" rows="4" cols="50" required></textarea><br><br>
+
+        <label for="name">Name:</label>
+        <textarea id="name" name="name" rows="4" cols="50" required></textarea><br><br>
+
+        <label for="username">Username:</label>
+        <textarea id="username" name="username" rows="4" cols="50" required></textarea><br><br>
+
+        <label for="description">Description:</label>
+        <textarea id="description" name="description" rows="4" cols="50"></textarea><br><br>
+
+        <label for="image">Image:</label>
+        <input type="file" id="image" name="image" accept="image/*" required><br><br>
+
+        <button type="submit">Create Blog</button>
+    </form>
+
     <h2>Existing Blogs</h2>
     <div id="blogsContainer"></div>
 
     <script>
+        // Function to fetch and display blogs
         async function fetchBlogs() {
             try {
                 const response = await fetch('https://cc-5vhm.onrender.com/v1/getBlog');
@@ -63,11 +87,12 @@
             });
         }
 
+        // Function to delete a blog
         async function deleteBlog(blogId) {
             if (!confirm('Are you sure you want to delete this blog?')) return;
 
             try {
-                const response = await fetch(`http://localhost:3001/v1/blogs/${blogId}`, {
+                const response = await fetch(`https://cc-5vhm.onrender.com/v1/blogs/${blogId}`, {
                     method: 'DELETE'
                 });
 
@@ -83,6 +108,81 @@
                 alert('An error occurred while deleting the blog.');
             }
         }
+
+        // Event listener for the blog creation form
+        document.getElementById('blogForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            
+            // Manually gather form data
+            const category = document.getElementById('category').value.trim();
+            const name = document.getElementById('name').value.trim();
+            const username = document.getElementById('username').value.trim();
+            const description = document.getElementById('description').value.trim();
+            const imageFile = document.getElementById('image').files[0];
+
+            if (!category || !name || !username || !description || !imageFile) {
+                alert('Please fill out all fields.');
+                return;
+            }
+
+            try {
+                // Prepare FormData for Cloudinary upload
+                const formData = new FormData();
+                formData.append('file', imageFile);
+                formData.append('upload_preset', 'BlogPage'); // Ensure this matches your preset name
+
+                // Log FormData entries for debugging
+                for (let pair of formData.entries()) {
+                    console.log(`${pair[0]}: ${pair[1]}`);
+                }
+
+                // Upload image to Cloudinary
+                const cloudinaryResponse = await fetch('https://api.cloudinary.com/v1_1/dvfmw4c9f/image/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const cloudinaryResult = await cloudinaryResponse.json();
+                
+                console.log('Cloudinary Response:', cloudinaryResult);
+
+                if (!cloudinaryResponse.ok) {
+                    throw new Error('Failed to upload image: ' + cloudinaryResult.error.message);
+                }
+
+                const imageUrl = cloudinaryResult.secure_url;
+
+                // Construct the data object
+                const data = {
+                    category,
+                    name,
+                    username,
+                    description,
+                    image: imageUrl // Use the Cloudinary image URL
+                };
+
+                // Send the blog data to your backend
+                const response = await fetch('https://cc-5vhm.onrender.com/v1/blogs', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    alert('Blog created successfully!');
+                    document.getElementById('blogForm').reset();
+                    fetchBlogs(); // Refresh the blog list
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while creating the blog.');
+            }
+        });
 
         // Initial fetch of blogs on page load
         fetchBlogs();
